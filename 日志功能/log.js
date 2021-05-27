@@ -1,6 +1,3 @@
-import { apiMinilog } from "@/api/globalSettingInfo/globalSettingInfo.js"
-import store from "@/store/index.js";
-import { formatTime } from "./index.js"
 class _logger {
 	constructor() {
 		this.logData = [] 			// 日志
@@ -27,7 +24,7 @@ class _logger {
 		if (!this.isSaveLogs) {
 			this.writeLogsToSave("logData", log, logMoll);
 			// 日志数目达到上限并且用户已经登录，自动上传日志
-			if (((this.logData.length > this.maxSaveLength) || (this.logDataCache.length > this.maxSaveLength)) && !!store.getters.userId) {
+			if (((this.logData.length > this.maxSaveLength) || (this.logDataCache.length > this.maxSaveLength))) {
 				this.saveLogs(this.logData);
 			}
 		} else {
@@ -37,13 +34,13 @@ class _logger {
 	
 	// 实际写入内容
 	writeLogsToSave(dataName, log, logMoll) {
-		// 日志格式整理
+		// 日志格式整理，建议使用yyyy-MM-dd HH-mm-ss格式
 		let _logDataTmp = {
-			time: formatTime(Date.now()),
+			time: +Date.now(),
 		};
+		// 保存日志头部信息，例如用户id，设备等等
 		if(this[dataName].length === 0) {
-			_logDataTmp.phoneModel = store.state.system.model;
-			_logDataTmp.userId = store.getters.userId;
+			
 		}
 		if(this[dataName].length >= this.maxTemporaryLength) {
 			if(!this[dataName][this.maxTemporaryLength-1].isLast) {
@@ -76,7 +73,7 @@ class _logger {
 		    uni.setStorageSync(dataName, this[dataName]);
 		} catch (e) {
 			// 用户已登录并且处于日志区直接保存日志，否者清除缓存，以免逻辑进行不下去
-			if(!!store.getters.userId && dataName === "logData") {
+			if(dataName === "logData") {
 				this.saveLogs(this.logData);
 			} else {
 				uni.setStorageSync(dataName, []);
@@ -92,17 +89,18 @@ class _logger {
 		let options = {
 			tmpLogs: _tmpLogs,
 		}
-		apiMinilog(options).then(res => {
-			this.logData = this.logDataCache;
-			this.isSaveLogs = false;
-			uni.setStorageSync("logData", this.logDataCache)
-			// // 清空缓冲区
-			this.logDataCache = [];
-			uni.setStorageSync("logDataCache", []);
-		}).catch(err => {
-			// 上传接口失败时，状态没有重置，logDataCache临时缓存一直增加，但是释放不了，此时应该重置状态，触发重新上传，清除logDataCache
-			this.isSaveLogs = false
-		})
+		// 上传日志
+		// apiMinilog(options).then(res => {
+		// 	this.logData = this.logDataCache;
+		// 	this.isSaveLogs = false;
+		// 	uni.setStorageSync("logData", this.logDataCache)
+		// 	// // 清空缓冲区
+		// 	this.logDataCache = [];
+		// 	uni.setStorageSync("logDataCache", []);
+		// }).catch(err => {
+		// 	// 上传接口失败时，状态没有重置，logDataCache临时缓存一直增加，但是释放不了，此时应该重置状态，触发重新上传，清除logDataCache
+		// 	this.isSaveLogs = false
+		// })
 	}
 }
 

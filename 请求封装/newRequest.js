@@ -1,28 +1,3 @@
-import request540 from "./apiRequest/request_540.js"
-import request302 from "./apiRequest/request_302.js"
-import {
-	requestNum
-} from "./index";
-import store from "@/store/index"
-import {
-	getNetworkType
-} from "./wxApi.js"
-import {
-	sha256
-} from "common/js-sha256/sha256.js";
-import {
-	version,
-	os,
-	platform,
-	httpKey,
-	baseUrl,
-	webViewUrl,
-	logsUrl,
-	modules,
-	hasSightseerPage
-} from "@/utils/base.js"
-
-
 class Request {
 	constructor() {
 		// 是否在执行login操作
@@ -31,15 +6,15 @@ class Request {
 		this.httpNum = 0
 	}
 	async request(opt = {}) {
-		global._logger.writeLogs("开始调用接口", !!opt && opt.url ? opt.url : "" )
+		// todo!打点，统计开始请求接口日志 opt.url
 		let netWorkStatus = await getNetworkType();
 		!opt.data && (opt.data = {})
 		let config = Object.assign({
 			url: "",
 			method: "GET",
 			data: {},
-			port: "blindbox",
-			miniBaseUrl: baseUrl,
+			modules: "modules",
+			baseUrl: "baseUrl",
 			header: {
 				"content-type": "application/json" // 默认值
 			},
@@ -58,65 +33,15 @@ class Request {
 				global._logger.writeLogs("当前网络异常，请检查网络");
 				return;
 			}
-			let url = `${config.miniBaseUrl}${modules[config.port]}/${config.url}`; // 默认url
-			// 不存在端口时候的url拼接
-			config.port == "" && (url = `${config.miniBaseUrl}/${config.url}`)
+			let url = `${config.baseUrl}${config.modules}/${config.url}`; // 默认url
 			if (config.method == "GET") {
-				if (!!store.getters.sessionId) {
-					config.data.sessionId = store.getters.sessionId
-				}
-				// 设置必传参数(默认值)
-				config.data.requestId = `${requestNum()}-${this.httpNum}`
 				config.data.timeline = +new Date();
-				config.data.os = os
-				config.data.platform = platform
-				config.data.downfrom = store.state.downfrom
-				config.data.downFrom = store.state.downFrom
-				config.data.appname = "bbox"
-				config.data.version = version;
-				let isSightseerStorage = uni.getStorageSync("isSightseerStorage")
-				if (!!isSightseerStorage) {
-					store.commit("setIsSightseer", isSightseerStorage);
-				}
-				let joinWeComStateStorage = uni.getStorageSync("joinWeComStateStorage")
-				if (!!joinWeComStateStorage) {
-					store.commit("setJoinWeComState", joinWeComStateStorage);
-				}
-				// 游客模式
-				if (store.getters.isSightseer == 1) {
-					let PagesInfo = getCurrentPages(); // 获取页面栈信息，最后一条，就是当前显示的页面
-					// #ifdef MP-TOUTIAO
-						let routeName = PagesInfo.length ? PagesInfo[PagesInfo.length-1].is.slice(1) : ""; // 当前页面的路由名称
-					// #endif
-					// #ifdef MP-WEIXIN
-						let routeName = PagesInfo.length ? PagesInfo[PagesInfo.length-1].route : ""; // 当前页面的路由名称
-					// #endif
-					config.data.guest = hasSightseerPage.indexOf(routeName) > -1 ? true : ""
-				}
-				config = Object.assign(config, opt);
-				// 去掉空的字段
-				removeVoidKey(config.data);
-				// sign
-				let signData = Object.keys(config.data)
-				signData.sort()
-				let initSign = "" // 签名字段
-
-				signData.forEach((item, index) => {
-					if (index + 1 === signData.length) {
-						initSign += item + "=" + config.data[item]
-					} else {
-						initSign += item + "=" + config.data[item] + "&"
-					}
-				})
-				initSign += `${httpKey}`
-				config.header.sign = sha256(initSign)
 			} else if (config.method == "POST") {
-				store.getters.userId === null && reject("userId为空");
-				config = Object.assign(config, opt);
-				url = `${config.miniBaseUrl}${config.url}?user_id=${store.getters.userId === null ? "" : store.getters.userId}`
-				// 去掉空的字段
-				removeVoidKey(config.data);
+				url = `${config.baseUrl}${config.url}`
 			};
+			config = Object.assign(config, opt);
+			// 去掉空的字段
+			removeVoidKey(config.data);
 			this.httpNum++;
 			uni.request({
 				url,
@@ -124,68 +49,31 @@ class Request {
 				header: config.header,
 				method: config.method,
 				success: async (res) => {
-					// 获取一个随机Key
-					let stationId = requestNum()
-					let lastUrl = config.url.split("/")[config.url.split("/").length - 1]; // 获取最后一个url名称
-					const Logins = ["wxMPLogin", "bdMPLogin", "login"]; // 登录名称列表
-					let name = Logins.includes(lastUrl) ? "login" : "";
 					switch (res.data.code) {
 						case 200:
 							resolve(res.data.data)
 							break;
-						case 302:
-							await request302(name, webViewUrl);
-							reject()
-							break;
-						case 1:
-							// PHP后台有些接口取得正确时返回是 1
-							resolve(res.data.data)
-							break;
-							// 未到开售时间,不可使用道具
-						case 314:
-							uni.showToast({
-								title: res.data.msg,
-								icon: "none",
-								duration: 2000
-							})
-							resolve(res.data.data)
-							break;
-						case 540:
-							request540();
-							reject(res.data)
-							break;
 						default:
-							if (res.data.msg == "SessionId错误" || res.data.msg == "sessionId is null") {
-								await request302(name);
-							} else if(config.needDefaultToast){
-								if(res.data.msg) {
-									uni.showToast({
-										title: res.data.msg,
-										icon: "none",
-										duration: 2000
-									})
-								}
+							if(config.needDefaultToast && !!res.data.msg){
+								uni.showToast({
+									title: res.data.msg,
+									icon: "none",
+									duration: 2000
+								})
 							}
 							reject(res.data)
 							break;
 					}
 					// 需要保存日志的接口调用保存
 					if(config.needSaveLog) {
-						global._logger.writeLogs(res.data.code !== 1 ? {
-							apiName: config.url + "响应",
-							options: config.data,
-							result: res.data
-						} : `调用接口 ${url} 成功`);
+						
 					}
 				},
 				fail: (error) => {
 					this.isLoading = false;
+					// 需要异常日志
 					if(config.needSaveLog) {
-						global._logger.writeLogs({
-							apiName: config.url + "异常响应",
-							options: config.data,
-							result: error
-						});
+						
 					}
 					uni.showToast({
 						title: "手速太快，请再试一次",
