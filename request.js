@@ -1,29 +1,32 @@
+// global.logManager--日志管理器
+// getNetworkType--检查网络方法
+// baseUrl--基础接口链接
+import { getNetworkType } from "./wxApi"
+import { baseUrl } from "./base.js"
 class Request {
 	constructor() {
 		// 是否在执行login操作
 		this.isLogin = 0 // 0 表示没有执行过登录 ， 1 表示正在执行登录
-		// requestId 自增数字
-		this.httpNum = 0
 	}
 	async request(opt = {}) {
-		// todo!打点，统计开始请求接口日志 opt.url
-		let netWorkStatus = await getNetworkType();
+		let _netWorkStatus = await getNetworkType();
 		!opt.data && (opt.data = {})
 		let config = Object.assign({
 			url: "",
-			method: "GET",
+			method: "POST",
 			data: {},
-			modules: "modules",
-			baseUrl: "baseUrl",
+			baseUrl,
 			header: {
 				"content-type": "application/json" // 默认值
 			},
-			needSaveLog: true,           // 是否需要保存日志,默认要保存，过滤没有必要保存的接口
-			needDefaultToast: true,		 // 是否需要默认的toast提示，不需要的话在api里面配置
+			needSaveMoreLog: true,              // 是否需要记录更多日志--部分返回数据过多，成功返回只保存状态
+            needDefaultToast: true,		        // 是否需要默认的toast提示，不需要的话在api里面配置
 		}, opt);
 		return new Promise((resolve, reject) => {
+            // 统计开始的接口调用
+            global.logManager.writeLogs("开始调用接口", !!opt && opt.url ? opt.url : "");
 			// 网络异常直接抛出
-			if(netWorkStatus != 1) {
+			if(_netWorkStatus !== 1) {
 				uni.showToast({
 					title: "当前网络异常，请检查网络",
 					icon: "none",
@@ -33,16 +36,8 @@ class Request {
 				global._logger.writeLogs("当前网络异常，请检查网络");
 				return;
 			}
-			let url = `${config.baseUrl}${config.modules}/${config.url}`; // 默认url
-			if (config.method == "GET") {
-				config.data.timeline = +new Date();
-			} else if (config.method == "POST") {
-				url = `${config.baseUrl}${config.url}`
-			};
+			let url = `${config.baseUrl}${config.url}`; // 默认url
 			config = Object.assign(config, opt);
-			// 去掉空的字段
-			removeVoidKey(config.data);
-			this.httpNum++;
 			uni.request({
 				url,
 				data: config.data,
@@ -65,37 +60,32 @@ class Request {
 							break;
 					}
 					// 需要保存日志的接口调用保存
-					if(config.needSaveLog) {
-						
-					}
+					if(res.data.code === 200 && !config.needSaveMoreLog) {
+						global.logManager.writeLogs(`调用接口 ${url} 成功`);
+					} else {
+                        global.logManager.writeLogs({
+							apiName: config.url + "响应",
+							options: config.data,
+							result: res.data
+						});
+                    }
 				},
 				fail: (error) => {
-					this.isLoading = false;
-					// 需要异常日志
-					if(config.needSaveLog) {
-						
-					}
 					uni.showToast({
 						title: "手速太快，请再试一次",
 						icon: "none",
 						duration: 2000
 					})
 					reject(error)
+                    global.logManager.writeLogs({
+						apiName: config.url + "异常响应",
+						options: config.data,
+						result: res.data
+					});
 				}
 			})
 		})		
 	}
 }
-
-// 清除为空的参数
-const removeVoidKey = obj => {
-	Object.keys(obj).forEach(key => {
-		if (obj[key] === "" || obj[key] === undefined || obj[key] === null) {
-			delete obj[key]
-		}
-	})
-}
-
 let request = new Request();
-
 export default request;

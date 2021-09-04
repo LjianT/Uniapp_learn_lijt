@@ -1,4 +1,3 @@
-import store from "@/store/index.js"
 import {
 	musicObjLists
 } from "@/utils/base.js";
@@ -72,7 +71,10 @@ class MusicAction {
 		name,
 		type = "bgMusic"
 	}) {
-		let nowObj = musicObjLists.find(val => val.name === name);
+        let nowObj = this.iSHasExistence(name);
+        if(!nowObj) {
+            return;
+        }
         switch (type){
             case "bgMusic":
                 (this.canBgPlay == "1") && (nowObj.obj.play());
@@ -83,25 +85,22 @@ class MusicAction {
         }
     }
 
-    // 暂停指定音频
-    pauseMusic({name}) {
-        let nowObj = musicObjLists.find(val => val.name === name);
-        nowObj.obj.pause();
+    // 判断当前处理音乐是否存在
+    iSHasExistence(name) {
+        if(!name) {
+            return "";
+        }
+        return musicObjLists.find(val => val.name === name) || "";
     }
 
-    // 停止指定音频
-    stopMusic({name}) {
-        let nowObj = musicObjLists.find(val => val.name === name);
-        nowObj.obj.stop();
+    // 具体操作处理
+    // nowHandle--pause:暂停  stop:停止 destroy:销毁
+    musicHandle(name, nowHandle) {
+        let nowObj = this.iSHasExistence(name);
+        if(nowObj) {
+            nowObj.obj[nowHandle]();
+        }
     }
-
-    // 销毁指定音频
-    destroyMusic({name}){
-        let nowObj = musicObjLists.find(val => val.name === name);
-        nowObj.obj.destroy();
-    }
-
-
 }
 
 export default MusicAction;
